@@ -1,0 +1,12 @@
+[package]
+name = "hub-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.12.19", features = ["json"] }
+futures = "0.3"
+common-models = { path = "../common-models" }

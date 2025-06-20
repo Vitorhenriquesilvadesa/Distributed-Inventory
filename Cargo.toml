@@ -1,0 +1,3 @@
+[workspace]
+members = ["service-discovery", "hub-service", "cd-service", "common-models"]
+resolver = "2"
