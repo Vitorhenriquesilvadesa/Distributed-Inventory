@@ -5,6 +5,44 @@ use common_models::{
 };
 use tokio::time::{sleep, Duration};
 
+/// Orquestra a busca e aquisição de um produto de outros CDs no sistema.
+///
+/// Esta função encapsula a lógica principal de um `CD Service` quando ele precisa
+/// de um produto que não possui em estoque ou cuja quantidade é insuficiente. O processo
+/// envolve múltiplos passos e interações com os outros componentes do sistema:
+///
+/// 1.  **Verificação Local:** Primeiramente, a função consulta o inventário local do próprio CD.
+/// 2.  **Consulta ao Hub:** Se o estoque for insuficiente, calcula a quantidade faltante e
+///     envia uma requisição ao `Hub Service` (`GET /who_has_product/{code}/{quantity}`)
+///     para descobrir quais outros CDs possuem o produto na quantidade necessária.
+/// 3.  **Localização via Service Discovery:** Ao receber a lista de CDs disponíveis do Hub,
+///     a função seleciona um fornecedor e consulta o `Service Discovery` (`GET /lookup/{id}`)
+///     para obter o endereço de rede do CD fornecedor.
+/// 4.  **Transferência P2P:** Com o endereço do fornecedor, inicia uma transferência
+///     direta (P2P), enviando uma requisição `POST /transfer_product` para o CD fornecedor.
+/// 5.  **Atualização de Inventário:** Se a transferência for bem-sucedida, a função atualiza
+///     o inventário local, adicionando a quantidade recebida do produto.
+///
+/// # Arguments
+///
+/// * `state`: Um `web::Data<CdState>` que contém o estado compartilhado do serviço.
+/// * `product_code`: O código do produto que precisa ser adquirido (ex: "celulares").
+/// * `quantity_needed`: A quantidade total do produto que o CD deseja possuir.
+///
+/// # Returns
+///
+/// * `Ok(())` - Se a necessidade do produto for satisfeita com sucesso.
+/// * `Err(String)` - Retorna uma descrição textual do erro em caso de falha.
+///
+/// # Panics
+///
+/// * A função utiliza `state.inventory.lock().unwrap()`. Este método causará um pânico (panic)
+///   se o `Mutex` que protege o inventário estiver "envenenado".
+///
+/// # Side Effects
+///
+/// * Realiza requisições de rede para outros serviços (Hub, Service Discovery, outros CDs).
+/// * Modifica o estado do inventário local (`state.inventory`) ao receber um produto.
 pub async fn request_product_from_system(
     state: web::Data<CdState>,
     product_code: String,
@@ -173,6 +211,26 @@ pub async fn request_product_from_system(
     ))
 }
 
+/// Executa uma tarefa de fundo que envia sinais de "heartbeat" para o Service Discovery.
+///
+/// Esta função é projetada para ser executada em uma `tokio::task` separada e entra
+/// em um loop infinito. A cada 10 segundos, ela envia uma requisição `POST` para o
+/// endpoint `/heartbeat/{id}` do `Service Discovery`, sinalizando que o `CD Service`
+/// atual ainda está ativo e funcional.
+///
+/// # Arguments
+///
+/// * `state`: O estado compartilhado `CdState`, de onde a função obtém a URL do
+///   `Service Discovery`, o ID do próprio CD e o cliente HTTP.
+///
+/// # Returns
+///
+/// * Esta função nunca retorna, pois opera em um `loop` infinito.
+///
+/// # Side Effects
+///
+/// * Executa continuamente em segundo plano.
+/// * Envia uma requisição de rede para o `Service Discovery` a cada 10 segundos.
 pub async fn send_heartbeat(state: web::Data<CdState>) {
     let client = &state.http_client;
     let heartbeat_url = format!("{}/heartbeat/{}", state.service_discovery_url, state.own_id);

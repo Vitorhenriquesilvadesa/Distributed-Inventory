@@ -3,6 +3,42 @@ use actix_web::{web, HttpResponse, Responder};
 use common_models::{Product, ProductAvailability, ServiceInfoLookup};
 use futures::future::join_all;
 
+/// **POST /products**
+///
+/// Registra um novo tipo de produto no catálogo central do Hub.
+///
+/// Este endpoint permite adicionar a definição de um novo produto ao sistema.
+/// Note que ele apenas cataloga o *tipo* de produto (código, nome, preço),
+/// não o seu estoque, que é gerenciado individualmente por cada `CD Service`.
+///
+/// # Corpo da Requisição (JSON)
+///
+/// ```json
+/// {
+///   "code": "laptop",
+///   "name": "Laptop Modelo Y",
+///   "price": 3500.00
+/// }
+/// ```
+///
+/// # Resposta de Sucesso (200 OK)
+///
+/// ```text
+/// Product laptop registered successfully
+/// ```
+///
+/// # Arguments
+///
+/// * `product`: Um `web::Json<Product>` contendo os dados do produto a ser registrado.
+/// * `data`: O estado compartilhado `AppState`, usado para acessar o `products_catalog`.
+///
+/// # Panics
+///
+/// * Pode causar um pânico se o `Mutex` do `products_catalog` estiver "envenenado".
+///
+/// # Side Effects
+///
+/// * Modifica o estado compartilhado da aplicação ao inserir um novo item no `products_catalog`.
 pub async fn register_product(
     product: web::Json<Product>,
     data: web::Data<AppState>,
@@ -14,6 +50,41 @@ pub async fn register_product(
     HttpResponse::Ok().body(format!("Product {} registered successfully", product_code))
 }
 
+/// **GET /products/{product_code}**
+///
+/// Consulta os detalhes de um produto específico no catálogo do Hub.
+///
+/// Retorna as informações canônicas de um produto (nome, preço, etc.)
+/// que está registrado no sistema.
+///
+/// # Parâmetros de Rota
+///
+/// * `product_code`: O código do produto a ser buscado (ex: "laptop").
+///
+/// # Resposta de Sucesso (200 OK)
+///
+/// ```json
+/// {
+///   "code": "laptop",
+///   "name": "Laptop Modelo Y",
+///   "price": 3500.00
+/// }
+/// ```
+///
+/// # Resposta de Erro (404 Not Found)
+///
+/// ```text
+/// Product laptop not found in catalog
+/// ```
+///
+/// # Arguments
+///
+/// * `path`: O código do produto (`product_code`) extraído do path da URL.
+/// * `data`: O estado `AppState` para acessar o `products_catalog`.
+///
+/// # Panics
+///
+/// * Pode causar um pânico se o `Mutex` do `products_catalog` estiver "envenenado".
 pub async fn get_product_details(
     path: web::Path<String>,
     data: web::Data<AppState>,
@@ -28,6 +99,49 @@ pub async fn get_product_details(
     }
 }
 
+/// **GET /who_has_product/{product_code}/{quantity_needed}**
+///
+/// Encontra quais CDs no sistema possuem uma quantidade mínima de um determinado produto.
+///
+/// Este é o endpoint mais importante do `Hub Service`. Ele atua como um coordenador de buscas,
+/// consultando todos os CDs ativos para verificar quem pode atender a uma determinada demanda.
+///
+/// # Parâmetros de Rota
+///
+/// * `product_code`: O código do produto desejado (ex: "celulares").
+/// * `quantity_needed`: A quantidade mínima necessária (ex: 10).
+///
+/// # Resposta de Sucesso (200 OK)
+///
+/// Retorna um array de CDs que possuem o produto na quantidade especificada.
+///
+/// ```json
+/// [
+///   {
+///     "cd_id": "cd_gamma",
+///     "quantity_available": 15,
+///     "product_info": {
+///       "code": "celulares",
+///       "name": "Smartphones X",
+///       "price": 1200.0,
+///       "quantity": 15
+///     }
+///   }
+/// ]
+/// ```
+///
+/// # Resposta de Erro (404 Not Found)
+///
+/// Retornada se nenhum CD puder atender ao pedido.
+///
+/// # Arguments
+///
+/// * `path`: Uma tupla `(String, u32)` contendo o `product_code` e a `quantity_needed`.
+/// * `data`: O estado `AppState` para acessar os serviços necessários.
+///
+/// # Side Effects
+///
+/// * Gera uma carga de rede significativa, consultando o Service Discovery e cada CD ativo.
 pub async fn who_has_product(
     path: web::Path<(String, u32)>,
     data: web::Data<AppState>,
