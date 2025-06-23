@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Representa um produto no catálogo ou no inventário de um Centro de Distribuição (CD).
 ///
@@ -14,7 +15,7 @@ use serde::{Deserialize, Serialize};
 ///   - `Debug`: Permite a formatação da struct para logs e depuração.
 ///   - `Serialize`, `Deserialize`: Habilita a conversão para e de JSON para comunicação via API.
 ///   - `Clone`: Permite a criação de cópias da estrutura.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Product {
     /// O código único que identifica o produto (ex: "celular", "laptop").
     pub code: String,
@@ -31,6 +32,7 @@ pub struct Product {
     ///   instrui o serializador a omitir este campo do JSON de saída se o seu valor for `None`.
     ///   Isso mantém os payloads da API limpos e eficientes.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 10)]
     pub quantity: Option<u32>,
 }
 
@@ -44,13 +46,16 @@ pub struct Product {
 ///
 /// * `#[derive(Debug, Serialize, Deserialize, Clone)]`:
 ///   - `Debug`, `Serialize`, `Deserialize`, `Clone`: Ver documentação da struct `Product`.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ServiceInfo {
     /// O identificador textual e único do serviço (ex: "cd_alpha").
+    #[schema(example = "cd_alpha")]
     pub id: String,
     /// O endereço IP onde o serviço pode ser acessado.
+    #[schema(example = "127.0.0.1")]
     pub ip: String,
     /// A porta de rede na qual o serviço está escutando.
+    #[schema(example = 8083)]
     pub port: u16,
     /// Timestamp do último heartbeat recebido, crucial para a detecção de falhas.
     ///
@@ -70,13 +75,16 @@ pub struct ServiceInfo {
 ///
 /// * `#[derive(Debug, Serialize, Deserialize, Clone)]`:
 ///   - `Debug`, `Serialize`, `Deserialize`, `Clone`: Ver documentação da struct `Product`.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ServiceInfoLookup {
     /// O identificador único do serviço.
+    #[schema(example = "cd_alpha")]
     pub id: String,
     /// O endereço IP do serviço.
+    #[schema(example = "127.0.0.1")]
     pub ip: String,
     /// A porta de rede do serviço.
+    #[schema(example = 8083)]
     pub port: u16,
 }
 
@@ -89,7 +97,7 @@ pub struct ServiceInfoLookup {
 ///
 /// * `#[derive(Debug, Serialize, Deserialize)]`:
 ///   - `Debug`, `Serialize`, `Deserialize`: Ver documentação da struct `Product`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProductAvailability {
     /// O ID do `CD Service` que possui o produto disponível.
     pub cd_id: String,
@@ -108,12 +116,15 @@ pub struct ProductAvailability {
 ///
 /// * `#[derive(Debug, Serialize, Deserialize)]`:
 ///   - `Debug`, `Serialize`, `Deserialize`: Ver documentação da struct `Product`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TransferRequest {
     /// O código do produto a ser transferido.
+    #[schema(example = "celulares")]
     pub product_code: String,
     /// A quantidade de unidades do produto solicitada.
+    #[schema(example = 5)]
     pub quantity: u32,
     /// O ID do CD que está solicitando a transferência, importante para logs e rastreabilidade.
+    #[schema(example = "cd_beta")]
     pub requester_cd_id: String,
 }

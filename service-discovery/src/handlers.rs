@@ -5,31 +5,16 @@ use common_models::{ServiceInfo, ServiceInfoLookup};
 use std::time::Duration;
 use tokio::time::sleep;
 
-/// **POST /register**
-///
-/// Registra um novo serviço ou atualiza um já existente no sistema.
-///
-/// Este endpoint é a porta de entrada para qualquer serviço (como um `CD Service`)
-/// se anunciar na rede. Ele recebe os detalhes do serviço, define o `last_heartbeat`
-/// para o momento atual e o insere no registro central.
-///
-/// # Corpo da Requisição (JSON)
-///
-/// ```json
-/// {
-///   "id": "cd_alpha",
-///   "ip": "127.0.0.1",
-///   "port": 8083
-/// }
-/// ```
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// Retorna uma mensagem de texto confirmando o registro.
-///
-/// ```text
-/// Service cd_alpha registered successfully
-/// ```
+/// Registra um novo serviço ou atualiza um já existente.
+#[utoipa::path(
+    post,
+    path = "/register",
+    request_body = ServiceInfo,
+    responses(
+        (status = 200, description = "Service registered successfully", body = String, example = json!("Service cd_alpha registered successfully")),
+    ),
+    tag = "Service Discovery"
+)]
 pub async fn register_service(
     info: web::Json<ServiceInfo>,
     data: web::Data<AppState>,
@@ -42,36 +27,19 @@ pub async fn register_service(
     HttpResponse::Ok().body(format!("Service {} registered successfully", info.id))
 }
 
-/// **GET /lookup/{id}**
-///
-/// Busca e retorna os detalhes de conexão de um serviço específico pelo seu ID.
-///
-/// Este endpoint permite que um serviço encontre o endereço de outro para comunicação
-/// direta. Retorna uma struct `ServiceInfoLookup` contendo os dados para a conexão.
-///
-/// # Parâmetros de Rota
-///
-/// * `id`: O identificador único do serviço a ser buscado (ex: "cd_alpha").
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// Retorna um objeto JSON com as informações do serviço.
-///
-/// ```json
-/// {
-///   "id": "cd_alpha",
-///   "ip": "127.0.0.1",
-///   "port": 8083
-/// }
-/// ```
-///
-/// # Resposta de Erro (404 Not Found)
-///
-/// Retorna uma mensagem de texto se o serviço não for encontrado.
-///
-/// ```text
-/// Service cd_alpha not found
-/// ```
+/// Busca os detalhes de conexão de um serviço específico.
+#[utoipa::path(
+    get,
+    path = "/lookup/{id}",
+    params(
+        ("id" = String, Path, description = "Unique ID of the service to lookup")
+    ),
+    responses(
+        (status = 200, description = "Service details found", body = ServiceInfoLookup),
+        (status = 404, description = "Service not found", body = String, example = json!("Service cd_omega not found"))
+    ),
+    tag = "Service Discovery"
+)]
 pub async fn lookup_service(path: web::Path<String>, data: web::Data<AppState>) -> impl Responder {
     let service_id = path.into_inner();
     let services = data.registered_services.lock().unwrap();
@@ -87,52 +55,34 @@ pub async fn lookup_service(path: web::Path<String>, data: web::Data<AppState>) 
     }
 }
 
-/// **GET /lookup_all**
-///
-/// Lista os IDs de todos os serviços atualmente registrados e ativos.
-///
-/// Este endpoint é usado pelo `Hub Service` para obter uma lista de todos os CDs
-/// que ele precisa consultar.
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// Retorna um array JSON contendo os IDs (strings) de todos os serviços registrados.
-///
-/// ```json
-/// [
-///   "cd_gamma",
-///   "cd_alpha",
-///   "cd_beta"
-/// ]
-/// ```
+/// Lista os IDs de todos os serviços registrados e ativos.
+#[utoipa::path(
+    get,
+    path = "/lookup_all",
+    responses(
+        (status = 200, description = "List of all registered service IDs", body = Vec<String>, example = json!(["cd_alpha", "cd_beta"])),
+    ),
+    tag = "Service Discovery"
+)]
 pub async fn lookup_all_services(data: web::Data<AppState>) -> impl Responder {
     let services = data.registered_services.lock().unwrap();
     let service_ids: Vec<String> = services.keys().cloned().collect();
     HttpResponse::Ok().json(service_ids)
 }
 
-/// **POST /heartbeat/{id}**
-///
-/// Recebe um sinal de "heartbeat" de um serviço, atualizando seu estado para "ativo".
-///
-/// Os serviços devem chamar este endpoint periodicamente para provar que ainda estão online.
-/// A função simplesmente atualiza o timestamp `last_heartbeat` do serviço correspondente.
-///
-/// # Parâmetros de Rota
-///
-/// * `id`: O identificador único do serviço enviando o heartbeat (ex: "cd_alpha").
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// ```text
-/// Heartbeat received for cd_alpha
-/// ```
-///
-/// # Resposta de Erro (404 Not Found)
-///
-/// ```text
-/// Service cd_alpha not found for heartbeat
-/// ```
+/// Recebe um sinal de "heartbeat" de um serviço.
+#[utoipa::path(
+    post,
+    path = "/heartbeat/{id}",
+    params(
+        ("id" = String, Path, description = "Unique ID of the service sending the heartbeat")
+    ),
+    responses(
+        (status = 200, description = "Heartbeat received", body = String, example = json!("Heartbeat received for cd_alpha")),
+        (status = 404, description = "Service not found", body = String, example = json!("Service cd_omega not found for heartbeat"))
+    ),
+    tag = "Service Discovery"
+)]
 pub async fn heartbeat(path: web::Path<String>, data: web::Data<AppState>) -> impl Responder {
     let service_id = path.into_inner();
     let mut services = data.registered_services.lock().unwrap();

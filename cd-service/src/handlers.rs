@@ -1,32 +1,20 @@
-// cd-service/src/handlers.rs
 use super::state::CdState;
 use actix_web::{web, HttpResponse, Responder};
 use common_models::{Product, TransferRequest};
 
-/// **GET /inventory/{product_code}**
-///
-/// Retorna a quantidade e os detalhes de um produto específico no inventário local do CD.
-///
-/// # Parâmetros de Rota
-///
-/// * `product_code`: O código do produto a ser consultado (ex: "garrafas").
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// ```json
-/// {
-///   "code": "garrafas",
-///   "name": "Garrafas de Água",
-///   "price": 2.50,
-///   "quantity": 50
-/// }
-/// ```
-///
-/// # Resposta de Erro (404 Not Found)
-///
-/// ```text
-/// Product garrafas not found in this CD
-/// ```
+/// Retorna a quantidade e os detalhes de um produto específico no inventário local.
+#[utoipa::path(
+    get,
+    path = "/inventory/{product_code}",
+    params(
+        ("product_code" = String, Path, description = "Code of the product to query")
+    ),
+    responses(
+        (status = 200, description = "Product details and quantity in local inventory", body = Product),
+        (status = 404, description = "Product not found in this CD", body = String, example = json!("Product laptops not found in this CD"))
+    ),
+    tag = "CD Service"
+)]
 pub async fn get_product_inventory(
     path: web::Path<String>,
     data: web::Data<CdState>,
@@ -41,34 +29,18 @@ pub async fn get_product_inventory(
     }
 }
 
-/// **POST /transfer_product**
-///
 /// Processa uma solicitação de transferência de produto vinda de outro CD.
-///
-/// Se o CD atual tiver a quantidade solicitada em estoque, ele deduz essa quantidade
-/// de seu inventário e retorna uma resposta de sucesso. Este endpoint é chamado
-/// pelo CD que *precisa* do produto.
-///
-/// # Corpo da Requisição (JSON)
-///
-/// ```json
-/// {
-///   "product_code": "celulares",
-///   "quantity": 5,
-///   "requester_cd_id": "cd_alpha"
-/// }
-/// ```
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// ```text
-/// Transfer successful
-/// ```
-///
-/// # Respostas de Erro
-///
-/// * **400 Bad Request**: Se a quantidade em estoque for insuficiente.
-/// * **404 Not Found**: Se o produto não existir no inventário deste CD.
+#[utoipa::path(
+    post,
+    path = "/transfer_product",
+    request_body = TransferRequest,
+    responses(
+        (status = 200, description = "Transfer successful", body = String, example = json!("Transfer successful")),
+        (status = 400, description = "Not enough quantity for transfer", body = String),
+        (status = 404, description = "Product not found in this CD for transfer", body = String)
+    ),
+    tag = "CD Service"
+)]
 pub async fn transfer_product(
     transfer_req: web::Json<TransferRequest>,
     data: web::Data<CdState>,
@@ -100,30 +72,16 @@ pub async fn transfer_product(
     }
 }
 
-/// **POST /receive_product**
-///
 /// Adiciona um produto e sua quantidade ao inventário local.
-///
-/// Este endpoint serve como um mecanismo para registrar a entrada de produtos no
-/// inventário do CD. Se o produto já existe, a quantidade é somada;
-/// caso contrário, um novo registro de produto é criado.
-///
-/// # Corpo da Requisição (JSON)
-///
-/// ```json
-/// {
-///   "code": "celulares",
-///   "name": "Smartphones X",
-///   "price": 1200.0,
-///   "quantity": 5
-/// }
-/// ```
-///
-/// # Resposta de Sucesso (200 OK)
-///
-/// ```text
-/// Product received successfully
-/// ```
+#[utoipa::path(
+    post,
+    path = "/receive_product",
+    request_body = Product,
+    responses(
+        (status = 200, description = "Product received successfully", body = String, example = json!("Product received successfully")),
+    ),
+    tag = "CD Service"
+)]
 pub async fn receive_product(
     product_data: web::Json<Product>,
     data: web::Data<CdState>,
