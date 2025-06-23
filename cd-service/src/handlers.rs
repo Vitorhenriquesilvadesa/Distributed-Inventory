@@ -1,9 +1,20 @@
-// cd-service/src/handlers.rs
 use super::state::CdState;
 use actix_web::{web, HttpResponse, Responder};
 use common_models::{Product, TransferRequest};
 
-// GET /inventory/{product_code}: Retorna a quantidade e detalhes de um produto no inventário local.
+/// Retorna a quantidade e os detalhes de um produto específico no inventário local.
+#[utoipa::path(
+    get,
+    path = "/inventory/{product_code}",
+    params(
+        ("product_code" = String, Path, description = "Code of the product to query")
+    ),
+    responses(
+        (status = 200, description = "Product details and quantity in local inventory", body = Product),
+        (status = 404, description = "Product not found in this CD", body = String, example = json!("Product laptops not found in this CD"))
+    ),
+    tag = "CD Service"
+)]
 pub async fn get_product_inventory(
     path: web::Path<String>,
     data: web::Data<CdState>,
@@ -18,16 +29,25 @@ pub async fn get_product_inventory(
     }
 }
 
-// POST /transfer_product: Recebe um pedido de transferência de outro CD.
+/// Processa uma solicitação de transferência de produto vinda de outro CD.
+#[utoipa::path(
+    post,
+    path = "/transfer_product",
+    request_body = TransferRequest,
+    responses(
+        (status = 200, description = "Transfer successful", body = String, example = json!("Transfer successful")),
+        (status = 400, description = "Not enough quantity for transfer", body = String),
+        (status = 404, description = "Product not found in this CD for transfer", body = String)
+    ),
+    tag = "CD Service"
+)]
 pub async fn transfer_product(
     transfer_req: web::Json<TransferRequest>,
     data: web::Data<CdState>,
 ) -> impl Responder {
     let mut inventory = data.inventory.lock().unwrap();
     if let Some(product) = inventory.get_mut(&transfer_req.product_code) {
-        // CORREÇÃO: Acessar a quantidade usando .unwrap_or(0) ou match
-        // Como estamos lidando com um inventário, esperamos que quantity seja Some(u32)
-        let current_quantity = product.quantity.unwrap_or(0); // Assume 0 se for None, o que não deveria acontecer no inventário do CD
+        let current_quantity = product.quantity.unwrap_or(0);
         if current_quantity >= transfer_req.quantity {
             product.quantity = Some(current_quantity - transfer_req.quantity);
             println!(
@@ -52,18 +72,27 @@ pub async fn transfer_product(
     }
 }
 
-// POST /receive_product: Recebe produtos de outro CD (simplesmente adiciona ao inventário).
+/// Adiciona um produto e sua quantidade ao inventário local.
+#[utoipa::path(
+    post,
+    path = "/receive_product",
+    request_body = Product,
+    responses(
+        (status = 200, description = "Product received successfully", body = String, example = json!("Product received successfully")),
+    ),
+    tag = "CD Service"
+)]
 pub async fn receive_product(
     product_data: web::Json<Product>,
     data: web::Data<CdState>,
 ) -> impl Responder {
     let mut inventory = data.inventory.lock().unwrap();
     let product_code = product_data.code.clone();
-    let quantity_received = product_data.quantity.unwrap_or(0); // CORREÇÃO: Tratar Option<u32>
+    let quantity_received = product_data.quantity.unwrap_or(0);
 
     inventory
         .entry(product_code.clone())
-        .and_modify(|p| p.quantity = Some(p.quantity.unwrap_or(0) + quantity_received)) // CORREÇÃO
+        .and_modify(|p| p.quantity = Some(p.quantity.unwrap_or(0) + quantity_received))
         .or_insert(Product {
             code: product_data.code.clone(),
             name: product_data.name.clone(),

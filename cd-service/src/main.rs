@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 mod client;
 mod handlers;
@@ -18,14 +20,37 @@ async fn main() -> std::io::Result<()> {
         eprintln!("Usage: {} <CD_ID> <PORT>", args[0]);
         std::process::exit(1);
     }
-
     let cd_id = args[1].clone();
+
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(
+            handlers::get_product_inventory,
+            handlers::transfer_product,
+            handlers::receive_product
+        ),
+        components(
+            schemas(common_models::Product, common_models::TransferRequest)
+        ),
+        tags(
+            (name = "CD Service", description = "Local inventory management and P2P transfer endpoints")
+        ),
+        info(
+            title = "CD (Distribution Center) Service API",
+            version = "1.0.0",
+            description = "A microservice representing a single distribution center with its own inventory."
+        )
+    )]
+    struct ApiDoc;
+
+    let openapi = ApiDoc::openapi();
+
     let port: u16 = args[2].parse().expect("Port must be a valid number");
     let ip = "127.0.0.1".to_string();
-
     let service_discovery_url = "http://127.0.0.1:8080".to_string();
     let hub_url = "http://127.0.0.1:8082".to_string();
-
+    
+    // Inventário inicial... (código original mantido)
     let initial_inventory = {
         let mut map = HashMap::new();
         match cd_id.as_str() {
@@ -112,6 +137,7 @@ async fn main() -> std::io::Result<()> {
         own_id: cd_id.clone(),
     });
 
+    // Registro no Service Discovery... (código original mantido)
     let client_for_register = Client::new();
     let service_info = ServiceInfo {
         id: cd_id.clone(),
@@ -150,7 +176,8 @@ async fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
     }
-
+    
+    // Tarefas de fundo... (código original mantido)
     let heartbeat_state = cd_state.clone();
     tokio::spawn(client::send_heartbeat(heartbeat_state));
 
@@ -189,6 +216,7 @@ async fn main() -> std::io::Result<()> {
     });
 
     println!("[{}] CD Service running on http://{}:{}", cd_id, ip, port);
+    println!("[{}] Swagger UI available at http://{}:{}/swagger-ui/", cd_id, ip, port);
 
     HttpServer::new(move || {
         App::new()
@@ -198,6 +226,10 @@ async fn main() -> std::io::Result<()> {
             )
             .service(web::resource("/transfer_product").post(handlers::transfer_product))
             .service(web::resource("/receive_product").post(handlers::receive_product))
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-doc/openapi.json", openapi.clone()),
+            )
     })
     .bind(format!("{}:{}", ip, port))?
     .run()

@@ -3,6 +3,16 @@ use actix_web::{web, HttpResponse, Responder};
 use common_models::{Product, ProductAvailability, ServiceInfoLookup};
 use futures::future::join_all;
 
+/// Registra um novo tipo de produto no catálogo central.
+#[utoipa::path(
+    post,
+    path = "/products",
+    request_body = Product,
+    responses(
+        (status = 200, description = "Product registered successfully", body = String, example = json!("Product laptop registered successfully")),
+    ),
+    tag = "Hub Service"
+)]
 pub async fn register_product(
     product: web::Json<Product>,
     data: web::Data<AppState>,
@@ -14,6 +24,19 @@ pub async fn register_product(
     HttpResponse::Ok().body(format!("Product {} registered successfully", product_code))
 }
 
+/// Consulta os detalhes de um produto específico no catálogo.
+#[utoipa::path(
+    get,
+    path = "/products/{product_code}",
+    params(
+        ("product_code" = String, Path, description = "Code of the product to lookup")
+    ),
+    responses(
+        (status = 200, description = "Product details found", body = Product),
+        (status = 404, description = "Product not found in catalog", body = String, example = json!("Product mouse not found in catalog"))
+    ),
+    tag = "Hub Service"
+)]
 pub async fn get_product_details(
     path: web::Path<String>,
     data: web::Data<AppState>,
@@ -28,6 +51,21 @@ pub async fn get_product_details(
     }
 }
 
+/// Encontra quais CDs possuem uma quantidade mínima de um produto.
+#[utoipa::path(
+    get,
+    path = "/who_has_product/{product_code}/{quantity_needed}",
+    params(
+        ("product_code" = String, Path, description = "Code of the desired product"),
+        ("quantity_needed" = u32, Path, description = "Minimum quantity needed")
+    ),
+    responses(
+        (status = 200, description = "List of CDs that have the product", body = Vec<ProductAvailability>),
+        (status = 404, description = "Product not found in any CD", body = String),
+        (status = 500, description = "Failed to query Service Discovery")
+    ),
+    tag = "Hub Service"
+)]
 pub async fn who_has_product(
     path: web::Path<(String, u32)>,
     data: web::Data<AppState>,
