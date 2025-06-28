@@ -34,8 +34,15 @@ pub async fn lookup_service(path: web::Path<String>, data: web::Data<AppState>) 
 
 pub async fn lookup_all_services(data: web::Data<AppState>) -> impl Responder {
     let services = data.registered_services.lock().unwrap();
-    let service_ids: Vec<String> = services.keys().cloned().collect();
-    HttpResponse::Ok().json(service_ids)
+    let service_infos: Vec<ServiceInfoLookup> = services
+        .values()
+        .map(|info| ServiceInfoLookup {
+            id: info.id.clone(),
+            ip: info.ip.clone(),
+            port: info.port,
+        })
+        .collect();
+    HttpResponse::Ok().json(service_infos)
 }
 
 pub async fn heartbeat(path: web::Path<String>, data: web::Data<AppState>) -> impl Responder {

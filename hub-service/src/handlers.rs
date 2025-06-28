@@ -37,51 +37,34 @@ pub async fn who_has_product(
     let service_discovery_url = &data.service_discovery_url;
 
     let lookup_all_cds_url = format!("{}/lookup_all", service_discovery_url);
-    let cd_ids_res = client.get(lookup_all_cds_url).send().await;
+    let cd_infos_res = client.get(lookup_all_cds_url).send().await;
 
-    let cd_ids: Vec<String> = match cd_ids_res {
+    let cd_infos: Vec<ServiceInfoLookup> = match cd_infos_res {
         Ok(resp) => resp.json().await.unwrap_or_else(|_| {
-            eprintln!("Failed to parse all CD IDs from Service Discovery, returning empty Vec.");
+            eprintln!("Failed to parse all CD infos from Service Discovery, returning empty Vec.");
             Vec::new()
         }),
         Err(e) => {
-            eprintln!("Error getting all CD IDs from Service Discovery: {}", e);
+            eprintln!("Error getting all CD infos from Service Discovery: {}", e);
             return HttpResponse::InternalServerError().body("Failed to query Service Discovery");
         }
     };
 
-    if cd_ids.is_empty() {
+    if cd_infos.is_empty() {
         return HttpResponse::NotFound().body("No CDs registered in Service Discovery.");
     }
 
     let mut futures = Vec::new();
 
-    for cd_id in cd_ids {
+    for cd_info in cd_infos {
         let client = client.clone();
-        let service_discovery_url = service_discovery_url.clone();
         let product_code = product_code.clone();
         let catalog_data = data.products_catalog.clone();
 
         futures.push(async move {
-            let service_info_res = client
-                .get(format!("{}/lookup/{}", service_discovery_url, cd_id))
-                .send()
-                .await;
-
-            let service_info: ServiceInfoLookup = match service_info_res {
-                Ok(resp) => resp.json().await.ok()?,
-                Err(_) => {
-                    eprintln!(
-                        "Could not lookup service {}: Network error or not found",
-                        cd_id
-                    );
-                    return None;
-                }
-            };
-
             let cd_url = format!(
                 "http://{}:{}/inventory/{}",
-                service_info.ip, service_info.port, product_code
+                cd_info.ip, cd_info.port, product_code
             );
             let product_res = client.get(&cd_url).send().await;
 
@@ -98,7 +81,7 @@ pub async fn who_has_product(
                                     .cloned()
                                     .unwrap_or_else(|| product_in_cd.clone());
                                 return Some(ProductAvailability {
-                                    cd_id: cd_id.clone(),
+                                    cd_id: cd_info.id,
                                     quantity_available: quantity,
                                     product_info: product_details,
                                 });
@@ -110,7 +93,7 @@ pub async fn who_has_product(
                 Err(e) => {
                     eprintln!(
                         "Error querying CD {} for product {}: {}",
-                        cd_id, product_code, e
+                        cd_info.id, product_code, e
                     );
                     None
                 }
